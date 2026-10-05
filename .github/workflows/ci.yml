@@ -32,3 +32,19 @@ jobs:
   secret:
     name: Secret scanning
     uses: ./.github/workflows/secret.yml
+
+  # Point de contrôle unique : à définir comme "required status check" dans la protection de branche.
+  security-scan:
+    name: security-scan
+    needs: [sca, sast, secret]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Vérifier le résultat des contrôles
+        run: |
+          if [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" = "true" ]; then
+            echo "Au moins un contrôle de sécurité a échoué."
+            exit 1
+          fi
