@@ -61,10 +61,12 @@ jobs:
               count=$(jq '[.runs[].results[]?] | length' codacy-results.sarif)
               echo "**${count} issue(s)** détectée(s) (seuil toléré : ${{ inputs.max-allowed-issues }})."
               echo
+              echo "Répartition par niveau : $(jq -r '[.runs[].results[]?] | group_by(.level // "n/a") | map("\(.[0].level // "n/a") : \(length)") | join(", ")' codacy-results.sarif)"
+              echo
               echo "| Règle | Niveau | Fichier | Ligne |"
               echo "|---|---|---|---|"
-              jq -r '[.runs[].results[]?] | .[:100][] | "| \(.ruleId) | \(.level // "n/a") | \(.locations[0].physicalLocation.artifactLocation.uri // "n/a") | \(.locations[0].physicalLocation.region.startLine // "n/a") |"' codacy-results.sarif
-              if [ "$count" -gt 100 ]; then echo; echo "_Affichage limité aux 100 premières issues, voir l'artifact pour le détail._"; fi
+              jq -r '[.runs[].results[]?] | .[:300][] | "| \(.ruleId) | \(.level // "n/a") | \(.locations[0].physicalLocation.artifactLocation.uri // "n/a") | \(.locations[0].physicalLocation.region.startLine // "n/a") |"' codacy-results.sarif
+              if [ "$count" -gt 300 ]; then echo; echo "_Affichage limité aux 300 premières issues, voir l'artifact pour le détail._"; fi
             else
               echo "Aucun rapport produit."
             fi

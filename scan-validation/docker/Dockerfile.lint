@@ -1,0 +1,8 @@
+# ECHANTILLON LINT UNIQUEMENT (aucune faille de sécurité) : sert à vérifier que Codacy (Hadolint) remonte les problèmes de style/qualité.
+FROM alpine:latest
+MAINTAINER nobody@example.com
+WORKDIR app
+ADD . /app
+RUN apk update
+RUN apk add curl
+RUN cd /app && ls

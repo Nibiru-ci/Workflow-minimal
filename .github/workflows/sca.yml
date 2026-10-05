@@ -1,6 +1,7 @@
 name: SCA
 
-# Software Composition Analysis : dépendances applicatives (lockfiles) et image conteneur (Trivy).
+# Software Composition Analysis : dépendances applicatives (lockfiles) et images conteneur (Trivy).
+# Tous les Dockerfile du dépôt sont découverts automatiquement : chacun est construit (sans push) puis scanné.
 
 on:
   workflow_call:
@@ -9,14 +10,6 @@ on:
         description: "Sévérités qui font échouer le scan"
         type: string
         default: "HIGH,CRITICAL"
-      dockerfile:
-        description: "Dockerfile à construire puis scanner (ignoré s'il n'existe pas)"
-        type: string
-        default: "Dockerfile"
-      docker-context:
-        description: "Contexte de build Docker"
-        type: string
-        default: "."
 
 permissions:
   contents: read
@@ -67,43 +60,71 @@ jobs:
           path: trivy-dependencies.txt
           if-no-files-found: ignore
 
-  sca-image:
-    name: SCA - Image conteneur
+  discover-images:
+    name: SCA - Découverte des Dockerfile
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 5
+    outputs:
+      found: ${{ steps.find.outputs.found }}
+      matrix: ${{ steps.find.outputs.matrix }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Détecter le Dockerfile
-        id: detect
-        env:
-          DOCKERFILE: ${{ inputs.dockerfile }}
+      - name: Rechercher les Dockerfile
+        id: find
         run: |
-          if [ -f "$DOCKERFILE" ]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Aucun Dockerfile ($DOCKERFILE) : scan d'image ignoré."
-            echo "## SCA - Image conteneur (Trivy)" >> "$GITHUB_STEP_SUMMARY"
-            echo "Aucun Dockerfile trouvé : scan d'image ignoré." >> "$GITHUB_STEP_SUMMARY"
-          fi
+          matrix=$(find . -type f \( -name 'Dockerfile' -o -name 'Dockerfile.*' -o -name '*.Dockerfile' \) \
+              -not -path './.git/*' -not -path '*/node_modules/*' \
+            | sed 's|^\./||' | sort \
+            | jq -R -s -c 'split("\n") | map(select(length > 0)) | to_entries | map({
+                index: .key,
+                dockerfile: .value,
+                context: (.value | split("/") | .[:-1] | join("/") | if . == "" then "." else . end),
+                slug: (.value | gsub("[^A-Za-z0-9]"; "-"))
+              })')
+          count=$(echo "$matrix" | jq length)
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "found=$([ "$count" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          {
+            echo "## SCA - Images conteneur (Trivy)"
+            if [ "$count" -gt 0 ]; then
+              echo "$count Dockerfile détecté(s) :"
+              echo "$matrix" | jq -r '.[] | "- `\(.dockerfile)` (contexte `\(.context)`)"'
+            else
+              echo "Aucun Dockerfile trouvé : scan d'image ignoré."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  sca-image:
+    name: SCA - Image (${{ matrix.dockerfile }})
+    needs: discover-images
+    if: needs.discover-images.outputs.found == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.discover-images.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Construire l'image (locale, sans push)
-        if: steps.detect.outputs.present == 'true'
         env:
-          DOCKERFILE: ${{ inputs.dockerfile }}
-          CONTEXT: ${{ inputs.docker-context }}
-        run: docker build -f "$DOCKERFILE" -t sca-scan:${{ github.sha }} "$CONTEXT"
+          DOCKERFILE: ${{ matrix.dockerfile }}
+          CONTEXT: ${{ matrix.context }}
+        run: docker build -f "$DOCKERFILE" -t "sca-scan:${{ matrix.index }}" "$CONTEXT"
 
       - name: Trivy - scan de l'image
-        if: steps.detect.outputs.present == 'true'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: image
-          image-ref: sca-scan:${{ github.sha }}
+          image-ref: sca-scan:${{ matrix.index }}
           scanners: vuln
           severity: ${{ inputs.severity }}
           ignore-unfixed: true
@@ -113,10 +134,10 @@ jobs:
           hide-progress: true
 
       - name: Résumé du scan
-        if: always() && steps.detect.outputs.present == 'true'
+        if: always()
         run: |
           {
-            echo "## SCA - Image  conteneur (Trivy)"
+            echo "## SCA - Image \`${{ matrix.dockerfile }}\` (Trivy)"
             if [ -s trivy-image.txt ]; then
               echo '```'
               head -c 500000 trivy-image.txt
@@ -127,9 +148,9 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publier le rapport
-        if: always() && steps.detect.outputs.present == 'true'
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: sca-image-report
+          name: sca-image-report-${{ matrix.slug }}
           path: trivy-image.txt
           if-no-files-found: ignore
