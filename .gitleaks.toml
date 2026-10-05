@@ -1,0 +1,9 @@
+# Configuration Gitleaks : règles par défaut étendues.
+# Ajouter ici uniquement des allowlists justifiées (faux positifs avérés), par exemple :
+#
+# [[allowlists]]
+# description = "Valeur factice de test"
+# paths = ['''tests/fixtures/.*''']
+
+[extend]
+useDefault = true

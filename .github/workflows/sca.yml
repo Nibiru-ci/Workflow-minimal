@@ -1,0 +1,135 @@
+name: SCA
+
+# Software Composition Analysis : dépendances applicatives (lockfiles) et image conteneur (Trivy).
+
+on:
+  workflow_call:
+    inputs:
+      severity:
+        description: "Sévérités qui font échouer le scan"
+        type: string
+        default: "HIGH,CRITICAL"
+      dockerfile:
+        description: "Dockerfile à construire puis scanner (ignoré s'il n'existe pas)"
+        type: string
+        default: "Dockerfile"
+      docker-context:
+        description: "Contexte de build Docker"
+        type: string
+        default: "."
+
+permissions:
+  contents: read
+
+jobs:
+  sca-dependencies:
+    name: SCA - Dépendances
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Trivy - scan des dépendances
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          severity: ${{ inputs.severity }}
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+          output: trivy-dependencies.txt
+          hide-progress: true
+
+      - name: Résumé du scan
+        if: always()
+        run: |
+          {
+            echo "## SCA - Dépendances (Trivy)"
+            if [ -s trivy-dependencies.txt ]; then
+              echo '```'
+              head -c 500000 trivy-dependencies.txt
+              echo '```'
+            else
+              echo "Aucune vulnérabilité ${{ inputs.severity }} (avec correctif disponible) détectée."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publier le rapport
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sca-dependencies-report
+          path: trivy-dependencies.txt
+          if-no-files-found: ignore
+
+  sca-image:
+    name: SCA - Image conteneur
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Détecter le Dockerfile
+        id: detect
+        env:
+          DOCKERFILE: ${{ inputs.dockerfile }}
+        run: |
+          if [ -f "$DOCKERFILE" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Aucun Dockerfile ($DOCKERFILE) : scan d'image ignoré."
+            echo "## SCA - Image conteneur (Trivy)" >> "$GITHUB_STEP_SUMMARY"
+            echo "Aucun Dockerfile trouvé : scan d'image ignoré." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Construire l'image (locale, sans push)
+        if: steps.detect.outputs.present == 'true'
+        env:
+          DOCKERFILE: ${{ inputs.dockerfile }}
+          CONTEXT: ${{ inputs.docker-context }}
+        run: docker build -f "$DOCKERFILE" -t sca-scan:${{ github.sha }} "$CONTEXT"
+
+      - name: Trivy - scan de l'image
+        if: steps.detect.outputs.present == 'true'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: sca-scan:${{ github.sha }}
+          scanners: vuln
+          severity: ${{ inputs.severity }}
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+          output: trivy-image.txt
+          hide-progress: true
+
+      - name: Résumé du scan
+        if: always() && steps.detect.outputs.present == 'true'
+        run: |
+          {
+            echo "## SCA - Image conteneur (Trivy)"
+            if [ -s trivy-image.txt ]; then
+              echo '```'
+              head -c 500000 trivy-image.txt
+              echo '```'
+            else
+              echo "Aucune vulnérabilité ${{ inputs.severity }} (avec correctif disponible) détectée."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publier le rapport
+        if: always() && steps.detect.outputs.present == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sca-image-report
+          path: trivy-image.txt
+          if-no-files-found: ignore

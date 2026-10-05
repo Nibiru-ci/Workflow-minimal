@@ -1,0 +1,34 @@
+name: CI
+
+# Orchestrateur uniquement : la logique de chaque contrôle vit dans son propre workflow réutilisable.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    # Hebdomadaire (lundi 05:00 UTC) : détecte les nouvelles CVE sans changement de code.
+    - cron: "0 5 * * 1"
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  sca:
+    name: SCA
+    uses: ./.github/workflows/sca.yml
+
+  sast:
+    name: SAST
+    uses: ./.github/workflows/sast.yml
+    secrets:
+      CODACY_PROJECT_TOKEN: ${{ secrets.CODACY_PROJECT_TOKEN }}
+
+  secret:
+    name: Secret scanning
+    uses: ./.github/workflows/secret.yml
