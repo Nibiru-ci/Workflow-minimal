@@ -1,0 +1,23 @@
+{
+    "_readme": [
+        "Lockfile minimal écrit à la main pour le test (composer indisponible).",
+        "Régénérer avec `composer update` pour un usage réel."
+    ],
+    "content-hash": "00000000000000000000000000000000",
+    "packages": [
+        {
+            "name": "guzzlehttp/guzzle",
+            "version": "6.5.4",
+            "type": "library"
+        }
+    ],
+    "packages-dev": [],
+    "aliases": [],
+    "minimum-stability": "stable",
+    "stability-flags": [],
+    "prefer-stable": false,
+    "prefer-lowest": false,
+    "platform": [],
+    "platform-dev": [],
+    "plugin-api-version": "2.6.0"
+}

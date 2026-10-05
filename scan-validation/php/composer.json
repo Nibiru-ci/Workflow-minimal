@@ -1,0 +1,8 @@
+{
+    "name": "scan-validation/php",
+    "description": "Echantillon volontairement vulnérable - validation des scans CI uniquement",
+    "type": "project",
+    "require": {
+        "guzzlehttp/guzzle": "6.5.4"
+    }
+}

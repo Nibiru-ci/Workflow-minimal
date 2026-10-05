@@ -1,0 +1,10 @@
+{
+  "name": "scan-validation-typescript",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Echantillon volontairement vulnérable - validation des scans CI uniquement",
+  "dependencies": {
+    "lodash": "4.17.20",
+    "minimist": "1.2.5"
+  }
+}

@@ -1,0 +1,40 @@
+# Veille sur les dépendances (SCA) : Dependabot ouvre des PR de mise à jour.
+# Les vulnérabilités connues sont bloquées par sca.yml (Trivy) ; Dependabot apporte la mise à jour proactive.
+# Supprimer les écosystèmes absents du projet : Dependabot signale une erreur s'il ne trouve pas de manifeste.
+version: 2
+updates:
+  - package-ecosystem: github-actions # actions épinglées par SHA dans .github/workflows
+    directory: "/"
+    schedule:
+      interval: weekly
+    labels: [dependencies]
+
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    labels: [dependencies]
+
+  - package-ecosystem: composer
+    directory: "/"
+    schedule:
+      interval: weekly
+    labels: [dependencies]
+
+  - package-ecosystem: gomod
+    directory: "/"
+    schedule:
+      interval: weekly
+    labels: [dependencies]
+
+  - package-ecosystem: maven
+    directory: "/"
+    schedule:
+      interval: weekly
+    labels: [dependencies]
+
+  - package-ecosystem: docker # images de base des Dockerfile
+    directory: "/"
+    schedule:
+      interval: weekly
+    labels: [dependencies]
