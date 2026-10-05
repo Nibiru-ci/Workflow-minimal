@@ -116,7 +116,7 @@ jobs:
         if: always() && steps.detect.outputs.present == 'true'
         run: |
           {
-            echo "## SCA - Image conteneur (Trivy)"
+            echo "## SCA - Image  conteneur (Trivy)"
             if [ -s trivy-image.txt ]; then
               echo '```'
               head -c 500000 trivy-image.txt
